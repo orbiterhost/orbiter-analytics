@@ -54,10 +54,12 @@ app.post("/analytics", verifyToken, async (c) => {
 app.get("/analytics/:siteId/stats", verifyToken, async (c) => {
   try {
     const siteId = c.req.param("siteId");
-    const startDate = c.req.query("startDate");
-    const endDate = c.req.query("endDate");
+    let startDate = c.req.query("startDate");
+    let endDate = c.req.query("endDate");
+
     if (!startDate || !endDate) {
-      return c.json({ message: "Start date and end date are required" }, 400);
+      endDate = Date.now().toString();
+      startDate = (Date.now() - (30 * 24 * 60 * 60 * 1000)).toString();
     }
 
     const stats = await db.getTrafficStats({
@@ -76,11 +78,12 @@ app.get("/analytics/:siteId/stats", verifyToken, async (c) => {
 app.get("/analytics/:siteId/referrers", verifyToken, async (c) => {
   try {
     const siteId = c.req.param("siteId");
-    const startDate = c.req.query("startDate");
-    const endDate = c.req.query("endDate");
+    let startDate = c.req.query("startDate");
+    let endDate = c.req.query("endDate");
 
     if (!startDate || !endDate) {
-      return c.json({ message: "Start date and end date are required" }, 400);
+      endDate = Date.now().toString();
+      startDate = (Date.now() - (30 * 24 * 60 * 60 * 1000)).toString();
     }
 
     const referrerBreakdown = await db.getReferrerBreakdown({
@@ -99,11 +102,12 @@ app.get("/analytics/:siteId/referrers", verifyToken, async (c) => {
 app.get("/analytics/:siteId/paths", verifyToken, async (c) => {
   try {
     const siteId = c.req.param("siteId");
-    const startDate = c.req.query("startDate");
-    const endDate = c.req.query("endDate");
+    let startDate = c.req.query("startDate");
+    let endDate = c.req.query("endDate");
 
     if (!startDate || !endDate) {
-      return c.json({ message: "Start date and end date are required" }, 400);
+      endDate = Date.now().toString();
+      startDate = (Date.now() - (30 * 24 * 60 * 60 * 1000)).toString();
     }
 
     const pathsBreakdown = await db.getPathsBreakdown({
@@ -121,11 +125,12 @@ app.get("/analytics/:siteId/paths", verifyToken, async (c) => {
 app.get("/analytics/:siteId/countries", verifyToken, async (c) => {
   try {
     const siteId = c.req.param("siteId");
-    const startDate = c.req.query("startDate");
-    const endDate = c.req.query("endDate");
+    let startDate = c.req.query("startDate");
+    let endDate = c.req.query("endDate");
 
     if (!startDate || !endDate) {
-      return c.json({ message: "Start date and end date are required" }, 400);
+      endDate = Date.now().toString();
+      startDate = (Date.now() - (30 * 24 * 60 * 60 * 1000)).toString();
     }
 
     const countries = await db.getCountryBreakdown({
@@ -156,7 +161,7 @@ app.get("/test", verifyToken, async (c) => {
   return c.text("Done!");
 });
 
-const port = 5000;
+const port = process.env.PORT || 5000;
 console.log(`Server is running on http://localhost:${port}`);
 
 serve({
