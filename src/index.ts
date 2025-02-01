@@ -12,7 +12,7 @@ const db = new TrafficDB("traffic.db");
 await db.initialize();
 
 const verifyToken = async (c: Context, next: Next) => {
-  const token = c.req.header("Orbiter-Analytics-Token");
+  const token = c.req.header("X-Orbiter-Analytics-Token");
 
   if (!token) {
     return c.json({ message: "Unauthorized" }, 401);
