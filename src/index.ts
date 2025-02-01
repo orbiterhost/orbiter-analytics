@@ -161,7 +161,7 @@ app.get("/test", verifyToken, async (c) => {
   return c.text("Done!");
 });
 
-const port = process.env.PORT || 5000;
+const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
 console.log(`Server is running on http://localhost:${port}`);
 
 serve({
