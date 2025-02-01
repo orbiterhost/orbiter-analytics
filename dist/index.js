@@ -3,12 +3,13 @@ import { Hono } from "hono";
 import TrafficDB from "./db.js";
 import { generateTestData } from "./testData.js";
 import dotenv from "dotenv";
+import { checkDiskSpace, monitorDiskSpace } from "./monitor.js";
 dotenv.config();
 const app = new Hono();
 const db = new TrafficDB("traffic.db");
 await db.initialize();
 const verifyToken = async (c, next) => {
-    const token = c.req.header("Orbiter-Analytics-Token");
+    const token = c.req.header("X-Orbiter-Analytics-Token");
     if (!token) {
         return c.json({ message: "Unauthorized" }, 401);
     }
@@ -47,7 +48,7 @@ app.get("/analytics/:siteId/stats", verifyToken, async (c) => {
         let endDate = c.req.query("endDate");
         if (!startDate || !endDate) {
             endDate = Date.now().toString();
-            startDate = (Date.now() - (30 * 24 * 60 * 60 * 1000)).toString();
+            startDate = (Date.now() - 30 * 24 * 60 * 60 * 1000).toString();
         }
         const stats = await db.getTrafficStats({
             siteId: siteId,
@@ -68,7 +69,7 @@ app.get("/analytics/:siteId/referrers", verifyToken, async (c) => {
         let endDate = c.req.query("endDate");
         if (!startDate || !endDate) {
             endDate = Date.now().toString();
-            startDate = (Date.now() - (30 * 24 * 60 * 60 * 1000)).toString();
+            startDate = (Date.now() - 30 * 24 * 60 * 60 * 1000).toString();
         }
         const referrerBreakdown = await db.getReferrerBreakdown({
             siteId: siteId,
@@ -89,7 +90,7 @@ app.get("/analytics/:siteId/paths", verifyToken, async (c) => {
         let endDate = c.req.query("endDate");
         if (!startDate || !endDate) {
             endDate = Date.now().toString();
-            startDate = (Date.now() - (30 * 24 * 60 * 60 * 1000)).toString();
+            startDate = (Date.now() - 30 * 24 * 60 * 60 * 1000).toString();
         }
         const pathsBreakdown = await db.getPathsBreakdown({
             siteId,
@@ -110,7 +111,7 @@ app.get("/analytics/:siteId/countries", verifyToken, async (c) => {
         let endDate = c.req.query("endDate");
         if (!startDate || !endDate) {
             endDate = Date.now().toString();
-            startDate = (Date.now() - (30 * 24 * 60 * 60 * 1000)).toString();
+            startDate = (Date.now() - 30 * 24 * 60 * 60 * 1000).toString();
         }
         const countries = await db.getCountryBreakdown({
             siteId,
@@ -137,6 +138,29 @@ app.get("/analytics/latest", verifyToken, async (c) => {
 app.get("/test", verifyToken, async (c) => {
     await generateTestData();
     return c.text("Done!");
+});
+app.get("/disk-space/monitor", verifyToken, async (c) => {
+    try {
+        const diskSpace = await monitorDiskSpace({
+            critical: 95,
+            warning: 85,
+        });
+        return c.json({ data: diskSpace }, 200);
+    }
+    catch (error) {
+        console.log(error);
+        return c.json({ message: "Server error" }, 200);
+    }
+});
+app.get("/disk-space/stats", verifyToken, async (c) => {
+    try {
+        const diskSpace = await checkDiskSpace();
+        return c.json({ data: diskSpace }, 200);
+    }
+    catch (error) {
+        console.log(error);
+        return c.json({ message: "Server error" }, 200);
+    }
 });
 const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
 console.log(`Server is running on http://localhost:${port}`);
