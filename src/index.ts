@@ -30,7 +30,7 @@ app.get("/health", (c) => {
   return c.text("Hello from orbit!");
 });
 
-app.post("/analytics", async (c) => {
+app.post("/analytics", verifyToken, async (c) => {
   try {
     const { siteId, path, userAgent, ipAddress, country, city, referrer } =
       await c.req.json();
@@ -156,7 +156,7 @@ app.get("/test", verifyToken, async (c) => {
   return c.text("Done!");
 });
 
-const port = 5001;
+const port = 5000;
 console.log(`Server is running on http://localhost:${port}`);
 
 serve({
