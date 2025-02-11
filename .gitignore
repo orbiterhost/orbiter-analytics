@@ -29,3 +29,4 @@ lerna-debug.log*
 
 ./test_traffic.db 
 ./traffic.db
+traffic.db
