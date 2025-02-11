@@ -19,6 +19,7 @@ interface TrafficQuery {
   siteId: string;
   startTime: number;
   endTime: number;
+  path?: string;
   batchSize?: number;
 }
 
@@ -33,6 +34,11 @@ interface TrafficStats {
 interface TrafficDBRecord extends TrafficRecord {
   id: number;
   created_at: number;
+}
+
+interface DailyViews {
+  date: string;     // Format: 'YYYY-MM-DD'
+  count: number;    // Number of views for that day
 }
 
 class TrafficDB {
@@ -159,6 +165,77 @@ class TrafficDB {
       results.push(record);
     }
     return results;
+  }
+
+  async getDailyViews({
+    siteId,
+    startTime,
+    endTime
+  }: Omit<TrafficQuery, "batchSize">): Promise<DailyViews[]> {
+    if (!this.db) {
+      throw new Error("Database not initialized");
+    }
+
+    return this.db.all<DailyViews[]>(`
+      WITH RECURSIVE dates(date) AS (
+        SELECT date(?, 'unixepoch')
+        UNION ALL
+        SELECT date(date, '+1 day')
+        FROM dates
+        WHERE date < date(?, 'unixepoch')
+      )
+      SELECT 
+        dates.date,
+        COUNT(traffic.id) as count
+      FROM dates
+      LEFT JOIN traffic ON (
+        traffic.site_id = ? AND
+        date(traffic.created_at, 'unixepoch') = dates.date
+      )
+      GROUP BY dates.date
+      ORDER BY dates.date ASC
+    `, [
+      Math.floor(startTime / 1000), // Convert to Unix timestamp in seconds
+      Math.floor(endTime / 1000),   // Convert to Unix timestamp in seconds
+      siteId
+    ]);
+  }
+
+  async getDailyViewsByPath({
+    siteId,
+    startTime,
+    endTime,
+    path
+  }: Omit<TrafficQuery, "batchSize">): Promise<DailyViews[]> {
+    if (!this.db) {
+      throw new Error("Database not initialized");
+    }
+
+    return this.db.all<DailyViews[]>(`
+      WITH RECURSIVE dates(date) AS (
+        SELECT date(?, 'unixepoch')
+        UNION ALL
+        SELECT date(date, '+1 day')
+        FROM dates
+        WHERE date < date(?, 'unixepoch')
+      )
+      SELECT 
+        dates.date,
+        COUNT(traffic.id) as count
+      FROM dates
+      LEFT JOIN traffic ON (
+        traffic.site_id = ? AND
+        date(traffic.created_at, 'unixepoch') = dates.date
+        ${path ? 'AND traffic.path = ?' : ''}
+      )
+      GROUP BY dates.date
+      ORDER BY dates.date ASC
+    `, [
+      Math.floor(startTime / 1000), // Convert to Unix timestamp in seconds
+      Math.floor(endTime / 1000),   // Convert to Unix timestamp in seconds
+      siteId,
+      ...(path ? [path] : [])
+    ]);
   }
 
   async getTrafficStats({

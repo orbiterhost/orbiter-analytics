@@ -69,7 +69,9 @@ app.get("/analytics/:siteId/stats", verifyToken, async (c) => {
       endTime: parseInt(endDate, 10),
     });
 
-    return c.json({ data: stats }, 200);
+    const dailyStats = await db.getDailyViews({ siteId: siteId, startTime: parseInt(startDate, 10), endTime: parseInt(endDate, 10) })
+
+    return c.json({ data: { stats, dailyStats } }, 200);
   } catch (error) {
     console.log(error);
     return c.json({ message: "Server error" }, 200);
