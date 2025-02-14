@@ -4,6 +4,8 @@ import TrafficDB from "./db.js";
 import { generateTestData } from "./testData.js";
 import dotenv from "dotenv";
 import { checkDiskSpace, monitorDiskSpace } from "./monitor.js";
+import cron from 'node-cron';
+import { backupDatabase } from "./pinata.js";
 dotenv.config();
 const app = new Hono();
 const db = new TrafficDB("traffic.db");
@@ -55,7 +57,8 @@ app.get("/analytics/:siteId/stats", verifyToken, async (c) => {
             startTime: parseInt(startDate, 10),
             endTime: parseInt(endDate, 10),
         });
-        return c.json({ data: stats }, 200);
+        const dailyStats = await db.getDailyViews({ siteId: siteId, startTime: parseInt(startDate, 10), endTime: parseInt(endDate, 10) });
+        return c.json({ data: { stats, dailyStats } }, 200);
     }
     catch (error) {
         console.log(error);
@@ -164,6 +167,16 @@ app.get("/disk-space/stats", verifyToken, async (c) => {
 });
 const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
 console.log(`Server is running on http://localhost:${port}`);
+cron.schedule('0 * * * *', async () => {
+    try {
+        // Your hourly task logic goes here
+        console.log('Running hourly cron job:', new Date().toISOString());
+        await backupDatabase();
+    }
+    catch (error) {
+        console.error('Error in cron job:', error);
+    }
+});
 serve({
     fetch: app.fetch,
     port,

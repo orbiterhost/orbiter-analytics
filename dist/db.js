@@ -83,6 +83,64 @@ class TrafficDB {
         }
         return results;
     }
+    async getDailyViews({ siteId, startTime, endTime }) {
+        if (!this.db) {
+            throw new Error("Database not initialized");
+        }
+        return this.db.all(`
+      WITH RECURSIVE dates(date) AS (
+        SELECT date(?, 'unixepoch')
+        UNION ALL
+        SELECT date(date, '+1 day')
+        FROM dates
+        WHERE date < date(?, 'unixepoch')
+      )
+      SELECT 
+        dates.date,
+        COUNT(traffic.id) as count
+      FROM dates
+      LEFT JOIN traffic ON (
+        traffic.site_id = ? AND
+        date(traffic.created_at, 'unixepoch') = dates.date
+      )
+      GROUP BY dates.date
+      ORDER BY dates.date ASC
+    `, [
+            Math.floor(startTime / 1000), // Convert to Unix timestamp in seconds
+            Math.floor(endTime / 1000), // Convert to Unix timestamp in seconds
+            siteId
+        ]);
+    }
+    async getDailyViewsByPath({ siteId, startTime, endTime, path }) {
+        if (!this.db) {
+            throw new Error("Database not initialized");
+        }
+        return this.db.all(`
+      WITH RECURSIVE dates(date) AS (
+        SELECT date(?, 'unixepoch')
+        UNION ALL
+        SELECT date(date, '+1 day')
+        FROM dates
+        WHERE date < date(?, 'unixepoch')
+      )
+      SELECT 
+        dates.date,
+        COUNT(traffic.id) as count
+      FROM dates
+      LEFT JOIN traffic ON (
+        traffic.site_id = ? AND
+        date(traffic.created_at, 'unixepoch') = dates.date
+        ${path ? 'AND traffic.path = ?' : ''}
+      )
+      GROUP BY dates.date
+      ORDER BY dates.date ASC
+    `, [
+            Math.floor(startTime / 1000), // Convert to Unix timestamp in seconds
+            Math.floor(endTime / 1000), // Convert to Unix timestamp in seconds
+            siteId,
+            ...(path ? [path] : [])
+        ]);
+    }
     async getTrafficStats({ siteId, startTime, endTime, }) {
         if (!this.db) {
             throw new Error("Database not initialized");
