@@ -32,3 +32,5 @@ lerna-debug.log*
 
 traffic.db
 dist/
+
+cloudflared.deb
