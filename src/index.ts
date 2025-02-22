@@ -14,6 +14,16 @@ const app = new Hono();
 const db = new TrafficDB("traffic.db");
 await db.initialize();
 
+function slowEquals(a: string, b: string): boolean {
+  if (!a || !b || a.length !== b.length) return false;
+  
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+      result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
 const verifyToken = async (c: Context, next: Next) => {
   const token = c.req.header("X-Orbiter-Analytics-Token");
 
@@ -21,7 +31,7 @@ const verifyToken = async (c: Context, next: Next) => {
     return c.json({ message: "Unauthorized" }, 401);
   }
 
-  if (token !== process.env.ADMIN_KEY) {
+  if (!slowEquals(token, process.env.ADMIN_KEY as string )) {
     return c.json({ message: "Unauthorized" }, 401);
   }
 
