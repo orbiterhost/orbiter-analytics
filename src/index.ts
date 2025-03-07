@@ -5,14 +5,34 @@ import { generateTestData } from "./testData.js";
 import dotenv from "dotenv";
 import { checkDiskSpace, monitorDiskSpace } from "./monitor.js";
 import cron from 'node-cron';
-import { backupDatabase } from "./pinata.js";
-
+import { PinataSDK } from "pinata";
+import fs from "fs";
+import { File, Blob } from 'formdata-node';
 dotenv.config();
+
+const pinata = new PinataSDK({
+  pinataJwt: process.env.PINATA_JWT,
+  pinataGateway: "",
+});
 
 const app = new Hono();
 
 const db = new TrafficDB("traffic.db");
 await db.initialize();
+
+const backupDatabase = async () => {
+    try {
+        console.log("backing up db");
+        const buffer = fs.readFileSync("./traffic.db");
+        const blob = new Blob([buffer]);
+        const file = new File([blob], `orbiter-analytics-db-${new Date()}`, { type: "text/plain"})
+        const upload = await pinata.upload.file(file).group("019501f1-c849-74df-aa3e-d92218097fef");
+        console.log(upload);
+    } catch (error) {
+        console.log("DB backup failed");
+        console.log(error);
+    }
+}
 
 function slowEquals(a: string, b: string): boolean {
   if (!a || !b || a.length !== b.length) return false;
@@ -195,6 +215,17 @@ app.get("/disk-space/stats", verifyToken, async (c) => {
 
     return c.json({ data: diskSpace }, 200);
   } catch (error) {
+    console.log(error);
+    return c.json({ message: "Server error" }, 200);
+  }
+});
+
+app.post("/snapshot", verifyToken, async (c) => {
+  try {
+    console.log("Snapshot time!");
+    await backupDatabase();
+    return c.text("Success");
+  } catch(error) {
     console.log(error);
     return c.json({ message: "Server error" }, 200);
   }
