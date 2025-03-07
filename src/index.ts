@@ -23,6 +23,7 @@ await db.initialize();
 const backupDatabase = async () => {
     try {
         console.log("backing up db");
+
         const buffer = fs.readFileSync("./traffic.db");
         const blob = new Blob([buffer]);
         const file = new File([blob], `orbiter-analytics-db-${new Date()}`, { type: "text/plain"})
