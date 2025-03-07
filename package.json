@@ -11,7 +11,7 @@
     "formdata-node": "^6.0.3",
     "hono": "^4.6.19",
     "node-cron": "^3.0.3",
-    "pinata": "^1.10.1",
+    "pinata": "^2.0.1",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7"
   },
