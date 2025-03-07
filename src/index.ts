@@ -4,13 +4,46 @@ import TrafficDB from "./db.js";
 import { generateTestData } from "./testData.js";
 import dotenv from "dotenv";
 import { checkDiskSpace, monitorDiskSpace } from "./monitor.js";
-
+import cron from 'node-cron';
+import { PinataSDK } from "pinata";
+import fs from "fs";
+import { File, Blob } from 'formdata-node';
 dotenv.config();
+
+const pinata = new PinataSDK({
+  pinataJwt: process.env.PINATA_JWT,
+  pinataGateway: "",
+});
 
 const app = new Hono();
 
 const db = new TrafficDB("traffic.db");
 await db.initialize();
+
+const backupDatabase = async () => {
+    try {
+        console.log("backing up db");
+
+        const buffer = fs.readFileSync("./traffic.db");
+        const blob = new Blob([buffer]);
+        const file = new File([blob], `orbiter-analytics-db-${new Date()}`, { type: "text/plain"})
+        const upload = await pinata.upload.file(file).group("019501f1-c849-74df-aa3e-d92218097fef");
+        console.log(upload);
+    } catch (error) {
+        console.log("DB backup failed");
+        console.log(error);
+    }
+}
+
+function slowEquals(a: string, b: string): boolean {
+  if (!a || !b || a.length !== b.length) return false;
+  
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+      result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
 
 const verifyToken = async (c: Context, next: Next) => {
   const token = c.req.header("X-Orbiter-Analytics-Token");
@@ -19,7 +52,7 @@ const verifyToken = async (c: Context, next: Next) => {
     return c.json({ message: "Unauthorized" }, 401);
   }
 
-  if (token !== process.env.ADMIN_KEY) {
+  if (!slowEquals(token, process.env.ADMIN_KEY as string )) {
     return c.json({ message: "Unauthorized" }, 401);
   }
 
@@ -69,7 +102,9 @@ app.get("/analytics/:siteId/stats", verifyToken, async (c) => {
       endTime: parseInt(endDate, 10),
     });
 
-    return c.json({ data: stats }, 200);
+    const dailyStats = await db.getDailyViews({ siteId: siteId, startTime: parseInt(startDate, 10), endTime: parseInt(endDate, 10) })
+
+    return c.json({ data: { stats, dailyStats } }, 200);
   } catch (error) {
     console.log(error);
     return c.json({ message: "Server error" }, 200);
@@ -186,8 +221,29 @@ app.get("/disk-space/stats", verifyToken, async (c) => {
   }
 });
 
+app.post("/snapshot", verifyToken, async (c) => {
+  try {
+    console.log("Snapshot time!");
+    await backupDatabase();
+    return c.text("Success");
+  } catch(error) {
+    console.log(error);
+    return c.json({ message: "Server error" }, 200);
+  }
+});
+
 const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
 console.log(`Server is running on http://localhost:${port}`);
+
+cron.schedule('0 * * * *', async () => {
+  try {
+    // Your hourly task logic goes here
+    console.log('Running hourly cron job:', new Date().toISOString());    
+    await backupDatabase();
+  } catch (error) {
+    console.error('Error in cron job:', error);
+  }
+});
 
 serve({
   fetch: app.fetch,
