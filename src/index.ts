@@ -123,6 +123,7 @@ app.post("/analytics", verifyToken, async (c) => {
       referrer,
       requestType,
     } = await c.req.json();
+    console.log({requestType})
     await db.recordTraffic({
       siteId: siteId,
       path: path,
