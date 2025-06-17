@@ -12,6 +12,7 @@ interface TrafficRecord {
   country?: string;
   city?: string;
   referrer?: string;
+  requestType?: string;
   timestamp?: number;
 }
 
@@ -25,10 +26,13 @@ interface TrafficQuery {
 
 interface TrafficStats {
   total_requests: number;
-  avg_response_time: number;
-  error_count: number;
   unique_visitors: number;
-  top_referrers: Array<{ referrer: string; count: number }>;
+  total_website_requests: number;
+  total_server_requests: number;
+  top_referrers: Array<{
+    referrer: string;
+    count: number;
+  }>;
 }
 
 interface TrafficDBRecord extends TrafficRecord {
@@ -37,8 +41,8 @@ interface TrafficDBRecord extends TrafficRecord {
 }
 
 interface DailyViews {
-  date: string;     // Format: 'YYYY-MM-DD'
-  count: number;    // Number of views for that day
+  date: string; // Format: 'YYYY-MM-DD'
+  count: number; // Number of views for that day
 }
 
 class TrafficDB {
@@ -68,6 +72,7 @@ class TrafficDB {
                 country TEXT, 
                 city TEXT,
                 referrer TEXT,
+                request_type TEXT,
                 created_at INTEGER DEFAULT (unixepoch())
             );
 
@@ -90,6 +95,7 @@ class TrafficDB {
     country,
     city,
     referrer,
+    requestType,
     timestamp = Date.now(),
   }: TrafficRecord): Promise<void> {
     if (!this.db) {
@@ -97,10 +103,10 @@ class TrafficDB {
     }
 
     const stmt = await this.db.prepare(`
-            INSERT INTO traffic (
-                site_id, timestamp, path, user_agent, ip_address, country, city, referrer
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `);
+      INSERT INTO traffic (
+        site_id, timestamp, path, user_agent, ip_address, country, city, referrer, request_type
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
 
     await stmt.run(
       siteId,
@@ -110,7 +116,8 @@ class TrafficDB {
       ipAddress,
       country,
       city,
-      referrer
+      referrer,
+      requestType
     );
     await stmt.finalize();
     console.log("RECORDED");
@@ -170,13 +177,14 @@ class TrafficDB {
   async getDailyViews({
     siteId,
     startTime,
-    endTime
+    endTime,
   }: Omit<TrafficQuery, "batchSize">): Promise<DailyViews[]> {
     if (!this.db) {
       throw new Error("Database not initialized");
     }
 
-    return this.db.all<DailyViews[]>(`
+    return this.db.all<DailyViews[]>(
+      `
       WITH RECURSIVE dates(date) AS (
         SELECT date(?, 'unixepoch')
         UNION ALL
@@ -194,24 +202,27 @@ class TrafficDB {
       )
       GROUP BY dates.date
       ORDER BY dates.date ASC
-    `, [
-      Math.floor(startTime / 1000), // Convert to Unix timestamp in seconds
-      Math.floor(endTime / 1000),   // Convert to Unix timestamp in seconds
-      siteId
-    ]);
+    `,
+      [
+        Math.floor(startTime / 1000), // Convert to Unix timestamp in seconds
+        Math.floor(endTime / 1000), // Convert to Unix timestamp in seconds
+        siteId,
+      ]
+    );
   }
 
   async getDailyViewsByPath({
     siteId,
     startTime,
     endTime,
-    path
+    path,
   }: Omit<TrafficQuery, "batchSize">): Promise<DailyViews[]> {
     if (!this.db) {
       throw new Error("Database not initialized");
     }
 
-    return this.db.all<DailyViews[]>(`
+    return this.db.all<DailyViews[]>(
+      `
       WITH RECURSIVE dates(date) AS (
         SELECT date(?, 'unixepoch')
         UNION ALL
@@ -226,16 +237,18 @@ class TrafficDB {
       LEFT JOIN traffic ON (
         traffic.site_id = ? AND
         date(traffic.created_at, 'unixepoch') = dates.date
-        ${path ? 'AND traffic.path = ?' : ''}
+        ${path ? "AND traffic.path = ?" : ""}
       )
       GROUP BY dates.date
       ORDER BY dates.date ASC
-    `, [
-      Math.floor(startTime / 1000), // Convert to Unix timestamp in seconds
-      Math.floor(endTime / 1000),   // Convert to Unix timestamp in seconds
-      siteId,
-      ...(path ? [path] : [])
-    ]);
+    `,
+      [
+        Math.floor(startTime / 1000), // Convert to Unix timestamp in seconds
+        Math.floor(endTime / 1000), // Convert to Unix timestamp in seconds
+        siteId,
+        ...(path ? [path] : []),
+      ]
+    );
   }
 
   async getTrafficStats({
@@ -246,43 +259,45 @@ class TrafficDB {
     if (!this.db) {
       throw new Error("Database not initialized");
     }
-
+  
     const basicStats = await this.db.get<Omit<TrafficStats, "top_referrers">>(
       `
-            SELECT 
-                COUNT(*) as total_requests,                                
-                COUNT(DISTINCT ip_address) as unique_visitors
-            FROM traffic
-            WHERE site_id = ?
-            AND timestamp >= ?
-            AND timestamp <= ?
-        `,
+        SELECT 
+          COUNT(*) as total_requests,                                
+          COUNT(DISTINCT ip_address) as unique_visitors,
+          COUNT(CASE WHEN request_type = 'static' OR request_type IS NULL THEN 1 END) as total_website_requests,
+          COUNT(CASE WHEN request_type = 'api' THEN 1 END) as total_server_requests
+        FROM traffic
+        WHERE site_id = ?
+        AND timestamp >= ?
+        AND timestamp <= ?
+      `,
       [siteId, startTime, endTime]
     );
-
+  
     if (!basicStats) {
       throw new Error("Failed to retrieve traffic stats");
     }
-
+  
     // Get top referrers separately
     const topReferrers = await this.db.all<
       Array<{ referrer: string; count: number }>
     >(
       `
-            SELECT 
-                COALESCE(referrer, '(direct)') as referrer,
-                COUNT(*) as count
-            FROM traffic
-            WHERE site_id = ?
-            AND timestamp >= ?
-            AND timestamp <= ?
-            GROUP BY referrer
-            ORDER BY count DESC
-            LIMIT 10
-        `,
+        SELECT 
+          COALESCE(referrer, '(direct)') as referrer,
+          COUNT(*) as count
+        FROM traffic
+        WHERE site_id = ?
+        AND timestamp >= ?
+        AND timestamp <= ?
+        GROUP BY referrer
+        ORDER BY count DESC
+        LIMIT 10
+      `,
       [siteId, startTime, endTime]
     );
-
+  
     return {
       ...basicStats,
       top_referrers: topReferrers,

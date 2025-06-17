@@ -44,7 +44,7 @@ const restoreDatabase = async () => {
     const files = await pinata.files.private
       .list()
       .group("019501f1-c849-74df-aa3e-d92218097fef");
-    const file = files.files[0]
+    const file = files.files[0];
     const response = await pinata.gateways.private.get(file.cid);
 
     if (!response || !response.data) {
@@ -113,8 +113,16 @@ app.get("/health", (c) => {
 
 app.post("/analytics", verifyToken, async (c) => {
   try {
-    const { siteId, path, userAgent, ipAddress, country, city, referrer } =
-      await c.req.json();
+    const {
+      siteId,
+      path,
+      userAgent,
+      ipAddress,
+      country,
+      city,
+      referrer,
+      requestType,
+    } = await c.req.json();
     await db.recordTraffic({
       siteId: siteId,
       path: path,
@@ -123,6 +131,7 @@ app.post("/analytics", verifyToken, async (c) => {
       referrer: referrer,
       country: country,
       city: city,
+      requestType: requestType,
     });
 
     return c.text("Success", 200);
